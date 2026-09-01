@@ -10,6 +10,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// تهيئة العميل باستعمال المفتاح من متغيرات البيئة
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.get('/', (req, res) => {
@@ -33,28 +34,17 @@ app.post('/api/analyze', async (req, res) => {
   "missing_fields": [ {"field": "اسم البيان الناقص", "reason": "سبب اعتباره ناقصاً"} ]
 }`;
 
-        // تجربة الأسماء الرسمية الدقيقة للنماذج المجانية
-        const candidateModels = ['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro'];
-        let response = null;
-        let lastError = null;
-
-        for (const modelName of candidateModels) {
-            try {
-                response = await ai.models.generateContent({
-                    model: modelName,
-                    contents: `${promptSystem}\n\nنص الصحيفة القضائية:\n${documentText}`,
-                    config: {
-                        responseMimeType: "application/json"
-                    }
-                });
-                if (response && response.text) break;
-            } catch (err) {
-                lastError = err;
+        // استدعاء النموذج المستقر والمعتمد مجاناً في حزمة @google/genai
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `${promptSystem}\n\nنص الصحيفة القضائية:\n${documentText}`,
+            config: {
+                responseMimeType: "application/json"
             }
-        }
+        });
 
         if (!response || !response.text) {
-            throw lastError || new Error("تعذر الاتصال بالنموذج");
+            throw new Error("لم يتم استلام نص استجابة من الذكاء الاصطناعي");
         }
 
         const rawText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
