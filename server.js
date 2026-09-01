@@ -10,7 +10,6 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// تهيئة العميل باستعمال المفتاح من متغيرات البيئة
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.get('/', (req, res) => {
@@ -34,9 +33,9 @@ app.post('/api/analyze', async (req, res) => {
   "missing_fields": [ {"field": "اسم البيان الناقص", "reason": "سبب اعتباره ناقصاً"} ]
 }`;
 
-        // استدعاء النموذج المستقر والمعتمد مجاناً في حزمة @google/genai
+        // استخدام نموذج gemini-3.6-flash المحدد في سجل الأخطاء
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.6-flash',
             contents: `${promptSystem}\n\nنص الصحيفة القضائية:\n${documentText}`,
             config: {
                 responseMimeType: "application/json"
