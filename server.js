@@ -7,12 +7,15 @@ dotenv.config();
 
 const app = express();
 
-// السماح لجميع الأجهزة والواجهات بالاتصال بالخادم
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// تهيئة مكتبة الذكاء الاصطناعي باستعمال المفتاح المحمي
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// صفحة رئيسية للتأكد من يعمل الخادم
+app.get('/', (req, res) => {
+    res.send('الخادم يعمل بنجاح!');
+});
 
 app.post('/api/analyze', async (req, res) => {
     try {
@@ -31,7 +34,6 @@ app.post('/api/analyze', async (req, res) => {
   "missing_fields": [ {"field": "اسم البيان الناقص", "reason": "سبب اعتباره ناقصاً"} ]
 }`;
 
-        // استدعاء النموذج المستقر والسريع
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `${promptSystem}\n\nنص الصحيفة القضائية:\n${documentText}`,
@@ -40,12 +42,18 @@ app.post('/api/analyze', async (req, res) => {
             }
         });
 
-        const resultJson = JSON.parse(response.text);
-        res.json(resultJson);
+        // تحويل استجابة الذكاء الاصطناعي إلى JSON
+        const rawText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const resultJson = JSON.parse(rawText);
+        
+        return res.json(resultJson);
 
     } catch (error) {
-        console.error("Server Error:", error);
-        res.status(500).json({ error: 'حدث خطأ في معالجة المستند عبر الخادم' });
+        console.error("Server Error Details:", error);
+        return res.status(500).json({ 
+            error: 'حدث خطأ في معالجة المستند عبر الخادم',
+            details: error.message 
+        });
     }
 });
 
