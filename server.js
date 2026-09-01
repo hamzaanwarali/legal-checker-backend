@@ -12,9 +12,8 @@ app.use(express.json({ limit: '10mb' }));
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// صفحة رئيسية للتأكد من يعمل الخادم
 app.get('/', (req, res) => {
-    res.send('الخادم يعمل بنجاح!');
+    res.send('الخادم يعمل بنجاح ومستعد لاستقبال الطلبات!');
 });
 
 app.post('/api/analyze', async (req, res) => {
@@ -34,15 +33,31 @@ app.post('/api/analyze', async (req, res) => {
   "missing_fields": [ {"field": "اسم البيان الناقص", "reason": "سبب اعتباره ناقصاً"} ]
 }`;
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `${promptSystem}\n\nنص الصحيفة القضائية:\n${documentText}`,
-            config: {
-                responseMimeType: "application/json"
-            }
-        });
+        // قائمة بالنماذج المجانية لضمان الاستمرارية
+        const availableModels = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+        let response = null;
+        let lastError = null;
 
-        // تحويل استجابة الذكاء الاصطناعي إلى JSON
+        for (const modelName of availableModels) {
+            try {
+                response = await ai.models.generateContent({
+                    model: modelName,
+                    contents: `${promptSystem}\n\nنص الصحيفة القضائية:\n${documentText}`,
+                    config: {
+                        responseMimeType: "application/json"
+                    }
+                });
+                if (response && response.text) break;
+            } catch (err) {
+                console.warn(`فشل النموذج ${modelName}، جاري المحاولة بالنموذج البديل...`);
+                lastError = err;
+            }
+        }
+
+        if (!response || !response.text) {
+            throw lastError || new Error("فشل الاتصال بنماذج الذكاء الاصطناعي");
+        }
+
         const rawText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
         const resultJson = JSON.parse(rawText);
         
