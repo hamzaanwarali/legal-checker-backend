@@ -35,7 +35,7 @@ const FIELDS_BY_ACTION = {
 };
 
 // نقطة النهاية (Endpoint) لتلقي الطلبات من Netlify
-app.post('/validate', upload.single('documentFile'), async (req, res) => {
+app.post('/api/analyze', upload.single('documentFile'), async (req, res) => {
   try {
     const { actionType, rawText } = req.body;
     let extractedText = rawText || '';
