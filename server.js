@@ -8,10 +8,16 @@ import { GoogleGenAI } from '@google/genai';
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.use(cors());
+// 1. إعدادات CORS للسماح للواجهة الأمامية بالاتصال بدون أخطاء أذونات
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
+
 app.use(express.json());
 
-// المرجع الحصري للحقول الخاصة بكل زر لتوفير التوكينز
+// 2. قائمة الحقول المطلوب تدقيقها لكل نوع طلب
 const FIELDS_BY_ACTION = {
   NewLawsuit: `
 - الطرف الأول (Plaintiffs[0]): LitName, NatiNo, GenNo, LitAge, JobDet, LitPhone, LitAdres, LitEmail.
@@ -34,13 +40,40 @@ const FIELDS_BY_ACTION = {
 - بيانات الطلب (Lawsuit): Side1No, Side2No, PayServes('طلب أمر على عريضة'), LawsDetls, PlaReq.`
 };
 
-// نقطة النهاية (Endpoint) لتلقي الطلبات من Netlify
+// 3. الدالة الذكية لتجربة النماذج المتاحة بالتتابع لمنع خطأ الضغط (503)
+async function generateContentWithFallback(ai, prompt) {
+  // مصفوفة بأسماء النماذج التي سيتم تجريبهما بالترتيب
+  const modelsToTry = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash'
+  ];
+
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`محاولة الفحص باستخدام النموذج: ${modelName}...`);
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: { responseMimeType: 'application/json' }
+      });
+      console.log(`نجح الفحص باستخدام: ${modelName}`);
+      return response; // إرجاع النتيجة فور النجاح وخروج من الدالة
+    } catch (err) {
+      console.warn(`تعذر استخدام ${modelName} بسبب (${err.message}). جارٍ الانتقال للنموذج التالي...`);
+    }
+  }
+
+  throw new Error('جميع نماذج Gemini تشهد ضغطاً عالياً حالياً، يرجى المحاولة بعد قليل.');
+}
+
+// 4. نقطة الاتصال الرئيسية واستقبال الطلبات من الواجهة الأمامية
 app.post('/api/analyze', upload.single('documentFile'), async (req, res) => {
   try {
     const { actionType, rawText } = req.body;
     let extractedText = rawText || '';
 
-    // 1. استخراج النص إذا تم رفع ملف
+    // استخراج النص من الملفات المرفوقة (Word أو PDF)
     if (req.file) {
       if (req.file.originalname.endsWith('.docx')) {
         const result = await mammoth.extractRawText({ buffer: req.file.buffer });
@@ -60,9 +93,10 @@ app.post('/api/analyze', upload.single('documentFile'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'نوع الخدمة غير مدعوم.' });
     }
 
-    // 2. الاتصال بنموذج الذكاء الاصطناعي Gemini-3.6-flash
+    // تجهيز كائن الذكاء الاصطناعي
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    
+
+    // نص التوجيه للنموذج (Prompt)
     const prompt = `
 أنت محرك فحص وتدقيق قانوني. مهمتك فحص النص التالي بناءً على قائمة الحقول الإلزامية الخاصة بـ (${actionType}) فقط.
 
@@ -82,20 +116,19 @@ ${extractedText}
   "validationErrors": [{"fieldName": "اسم الحقل", "issueDescription": "وصف المشكلة"}]
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: prompt,
-      config: { responseMimeType: 'application/json' }
-    });
+    // تنفيذ الفحص عبر الدالة الاحتياطية
+    const response = await generateContentWithFallback(ai, prompt);
 
+    // تحويل النتيجة لـ JSON وإرسالها للواجهة الأمامية
     const analysisResult = JSON.parse(response.text);
     return res.json(analysisResult);
 
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر أثناء الفحص.' });
+    console.error('خطأ في السيرفر:', error);
+    return res.status(500).json({ success: false, message: error.message || 'حدث خطأ في السيرفر أثناء الفحص.' });
   }
 });
 
-const PORT = process.env.PORT || 3000;
+// 5. تشغيل السيرفر على المنفذ المخصص من Render
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
