@@ -16,7 +16,7 @@ app.use(cors({
 
 app.use(express.json());
 
-// ضوابط الحقول الإلزامية والمطلوبة للعرائض بالنصوص العادية أو الفقرات أو القوائم
+// ضوابط الحقول الإلزامية والمطلوبة بالنص الحر والفقرات لكل خدمة قضائية
 const SERVICE_RULES = {
   NewLawsuit: `
 نوع الخدمة: إنشاء دعوى جديدة (الصفحة الأولى)
@@ -171,23 +171,25 @@ app.post('/api/analyze', upload.single('documentFile'), async (req, res) => {
     const { actionType, rawText } = req.body;
     let extractedText = rawText || '';
 
+    // استخراج النص من ملفات Word أو PDF إذا تم رفع ملف
     if (req.file) {
-      if (req.file.originalname.endsWith('.docx')) {
+      const fileName = req.file.originalname.toLowerCase();
+      if (fileName.endsWith('.docx')) {
         const result = await mammoth.extractRawText({ buffer: req.file.buffer });
         extractedText = result.value;
-      } else if (req.file.originalname.endsWith('.pdf')) {
+      } else if (fileName.endsWith('.pdf')) {
         const pdfData = await pdfParse(req.file.buffer);
         extractedText = pdfData.text;
       }
     }
 
-    if (!extractedText.trim()) {
-      return res.status(400).json({ success: false, message: 'لم يتم العثور على نص لفحصه.' });
+    if (!extractedText || !extractedText.trim()) {
+      return res.status(400).json({ success: false, message: 'لم يتم العثور على نص لفحصه (يرجى إرفاق ملف Word/PDF أو لصق النص).' });
     }
 
-    const rules = SERVICE_RULES[actionType];
+    const rules = SERVICE_RULES[actionType || 'NewLawsuit'];
     if (!rules) {
-      return res.status(400).json({ success: false, message: 'نوع الخدمة المحدد غير مدعوم.' });
+      return res.status(400).json({ success: false, message: 'نوع الخدمة القضائية المحدد غير معروف.' });
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
