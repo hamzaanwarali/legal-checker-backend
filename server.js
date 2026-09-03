@@ -1,64 +1,101 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
-
-dotenv.config();
+const express = require('express');
+const cors = require('cors');
+const multer = require('multer');
+const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
+const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json());
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// المرجع الحصري للحقول الخاصة بكل زر لتوفير التوكينز
+const FIELDS_BY_ACTION = {
+  NewLawsuit: `
+- الطرف الأول (Plaintiffs[0]): LitName, NatiNo, GenNo, LitAge, JobDet, LitPhone, LitAdres, LitEmail.
+- الطرف الثاني (Defendants[0]): LitName, NatiNo, GenNo, LitAge, JobDet, LitPhone, LitAdres, LitEmail.
+- تفاصيل الدعوى (Lawsuit): Side1No, Side2No, PayServes('عريضة دعوى'), LawsEDate, LawsDetls, PlaReq, LawsRes.`,
 
-app.get('/', (req, res) => {
-    res.send('الخادم يعمل بنجاح!');
-});
+  AppealPetition: `
+- الطاعن (Plaintiffs[0]): LitName, JobDet, LitPhone, LitAdres, LitEmail.
+- المطعون ضده (Defendants[0]): LitName, JobDet, LitPhone, LitAdres.
+- بيانات الطعن (Lawsuit): Side1No, Side2No, PayServes('عريضة طعن'), LawsEDate, LawsDetls, PlaReq.`,
 
-app.post('/api/analyze', async (req, res) => {
-    try {
-        const { documentText } = req.body;
-        if (!documentText) {
-            return res.status(400).json({ error: 'لم يتم تقديم نص المستند' });
-        }
+  PerformanceOrder: `
+- طالب الأمر (Plaintiffs[0]): LitName, NatiNo, GenNo, LitAge, JobDet, LitPhone, LitAdres, LitEmail.
+- مطلوب الأمر ضده (Defendants[0]): LitName, NatiNo, GenNo, LitAge, JobDet, LitPhone, LitAdres, LitEmail.
+- بيانات الطلب والمالية (Lawsuit): Side1No, Side2No, PayServes('طلب اصدار أمر أداء'), LawsEDate, LawsDetls, LawsRes, PlaReq, LawsFes, LawsTes, LawsLDate.`,
 
-        const promptSystem = `أنت خبير قضائي ومحلل بيانات قانونية. قم بتحليل صحيفة الدعوى المرفقة واستخراج البيانات الشكليّة ودراسة ما إذا كان هناك أي نقص (مثل: مهنة المدعي، مهنة المدعى عليه، العنوان التفصيلي، أرقام الهواتف، اسم المحكمة، السن).
-أرجع النتيجة حصراً بصيغة JSON نظيفة ومطابقة للهيكل التالي بالضبط دون أي كود خارجي:
+  PetitionOrder: `
+- الطالب (Plaintiffs[0]): LitName, JobDet, LitPhone, LitAdres, LitEmail.
+- المطلوب ضده (Defendants[0]): LitName, JobDet, LitPhone, LitAdres.
+- بيانات الطلب (Lawsuit): Side1No, Side2No, PayServes('طلب أمر على عريضة'), LawsDetls, PlaReq.`
+};
+
+// نقطة النهاية (Endpoint) لتلقي الطلبات من Netlify
+app.post('/validate', upload.single('documentFile'), async (req, res) => {
+  try {
+    const { actionType, rawText } = req.body;
+    let extractedText = rawText || '';
+
+    // 1. استخراج النص إذا تم رفع ملف
+    if (req.file) {
+      if (req.file.originalname.endsWith('.docx')) {
+        const result = await mammoth.extractRawText({ buffer: req.file.buffer });
+        extractedText = result.value;
+      } else if (req.file.originalname.endsWith('.pdf')) {
+        const pdfData = await pdfParse(req.file.buffer);
+        extractedText = pdfData.text;
+      }
+    }
+
+    if (!extractedText.trim()) {
+      return res.status(400).json({ success: false, message: 'لم يتم العثور على نص لفحصه.' });
+    }
+
+    const actionFields = FIELDS_BY_ACTION[actionType];
+    if (!actionFields) {
+      return res.status(400).json({ success: false, message: 'نوع الخدمة غير مدعوم.' });
+    }
+
+    // 2. الاتصال بنموذج الذكاء الاصطناعي Gemini 2.5
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    
+    const prompt = `
+أنت محرك فحص وتدقيق قانوني. مهمتك فحص النص التالي بناءً على قائمة الحقول الإلزامية الخاصة بـ (${actionType}) فقط.
+
+قائمة الحقول المطلوبة:
+${actionFields}
+
+النص المراد فحصه:
+"""
+${extractedText}
+"""
+
+المطلوب: قم بإرجاع النتيجة بصيغة JSON فقط بالتنسيق التالي:
 {
-  "court": "اسم المحكمة أو null",
-  "subject": "موضوع الدعوى أو null",
-  "plaintiff": { "name": null, "age": null, "job": null, "phone": null, "address": null },
-  "defendant": { "name": null, "age": null, "job": null, "phone": null, "address": null },
-  "missing_fields": [ {"field": "اسم البيان الناقص", "reason": "سبب اعتباره ناقصاً"} ]
+  "isReadyForSubmission": boolean,
+  "completedFields": [{"fieldName": "اسم الحقل", "extractedValue": "القيمة"}],
+  "missingFields": ["اسم الحقل الناقص"],
+  "validationErrors": [{"fieldName": "اسم الحقل", "issueDescription": "وصف المشكلة"}]
 }`;
 
-        // استخدام نموذج gemini-3.6-flash المحدد في سجل الأخطاء
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents: `${promptSystem}\n\nنص الصحيفة القضائية:\n${documentText}`,
-            config: {
-                responseMimeType: "application/json"
-            }
-        });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
+    });
 
-        if (!response || !response.text) {
-            throw new Error("لم يتم استلام نص استجابة من الذكاء الاصطناعي");
-        }
+    const analysisResult = JSON.parse(response.text);
+    return res.json(analysisResult);
 
-        const rawText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const resultJson = JSON.parse(rawText);
-        
-        return res.json(resultJson);
-
-    } catch (error) {
-        console.error("Server Error Details:", error);
-        return res.status(500).json({ 
-            error: 'حدث خطأ في معالجة المستند عبر الخادم',
-            details: error.message 
-        });
-    }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر أثناء الفحص.' });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`الخادم يعمل بنجاح على المنفذ: ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
