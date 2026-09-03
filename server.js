@@ -146,10 +146,14 @@ const SERVICE_RULES = {
 };
 
 async function generateContentWithFallback(ai, prompt) {
+  // مصفوفة تبدأ بأحدث النماذج المتاحة من جوجل مع نماذج احتياطية
   const modelsToTry = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash'
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash'
   ];
+
+  let lastError = null;
 
   for (const modelName of modelsToTry) {
     try {
@@ -161,9 +165,11 @@ async function generateContentWithFallback(ai, prompt) {
       return response;
     } catch (err) {
       console.warn(`تعذر الاستجابة من النموذج ${modelName}: ${err.message}`);
+      lastError = err;
     }
   }
-  throw new Error('جميع نماذج الفحص مشغولة حالياً، يرجى إعادة المحاولة.');
+
+  throw new Error(`جميع نماذج الفحص غير متاحة حالياً. التفاصيل: ${lastError?.message || 'خطأ في الاتصال'}`);
 }
 
 app.post('/api/analyze', upload.single('documentFile'), async (req, res) => {
