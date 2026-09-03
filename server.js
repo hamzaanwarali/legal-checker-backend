@@ -1,9 +1,9 @@
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const mammoth = require('mammoth');
-const pdfParse = require('pdf-parse');
-const { GoogleGenAI } = require('@google/genai');
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
+import mammoth from 'mammoth';
+import pdfParse from 'pdf-parse';
+import { GoogleGenAI } from '@google/genai';
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
