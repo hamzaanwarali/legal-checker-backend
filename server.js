@@ -60,7 +60,7 @@ app.post('/api/analyze', upload.single('documentFile'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'نوع الخدمة غير مدعوم.' });
     }
 
-    // 2. الاتصال بنموذج الذكاء الاصطناعي Gemini 2.5
+    // 2. الاتصال بنموذج الذكاء الاصطناعي Gemini-3.6-flash
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     
     const prompt = `
@@ -83,7 +83,7 @@ ${extractedText}
 }`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: prompt,
       config: { responseMimeType: 'application/json' }
     });
