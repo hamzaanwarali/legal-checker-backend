@@ -25,7 +25,9 @@ function normalizeArabicNumerals(str) {
   for (let i = 0; i < 10; i++) {
     str = str.replace(easternNumbers[i], westernNumbers[i]);
   }
-  return str;
+  
+  // إضافة مسافات حول السلاسل الرقمية الملتصقة بالنصوص لسهولة التقاطها بواسطة AI
+  return str.replace(/([^\d\s])(\d+)/g, '$1 $2').replace(/(\d+)([^\d\s])/g, '$1 $2');
 }
 
 // قواعد وضوابط الخدمات القضائية الأربعة المعتمدة
