@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منظومة التدقيق والتحقق القانوني الذكي</title>
+    <!-- Bootstrap 5 RTL CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Cairo Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f4f6f9;
+        }
+        .main-header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            padding: 2.5rem 0;
+            margin-bottom: 2rem;
+            border-bottom: 4px solid #d4af37;
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .btn-action {
+            padding: 0.9rem 1rem;
+            font-weight: 700;
+            border-radius: 8px;
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.88);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- مؤشر التحميل أثناء الفحص -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner-border text-primary mb-3" style="width: 3.5rem; height: 3.5rem;" role="status"></div>
+        <h4 class="fw-bold text-dark">جاري تدقيق النص والملفات والأطراف إلكترونياً...</h4>
+        <p class="text-muted">يرجى الانتظار للحظات لحين فحص كامل المرفقات والبيانات الإلزامية.</p>
+    </div>
+
+    <!-- الهيدر -->
+    <header class="main-header text-center">
+        <div class="container">
+            <h1 class="fw-bold mb-2"><i class="bi bi-shield-check me-2"></i>منظومة التحقق والتدقيق القضائي الذكي</h1>
+            <p class="lead mb-0">يمكنك رفع ملف Word (.docx) أو PDF أو كتابة النص مباشرةً واختيار نوع الخدمة لفحصها</p>
+        </div>
+    </header>
+
+    <div class="container mb-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                
+                <!-- نموذج إدخال البيانات والملفات -->
+                <div class="card p-4 mb-4">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-file-earmark-arrow-up me-2"></i>إدخال المستند أو رفع الملف:</h5>
+                    
+                    <!-- إرفاق ملف Word أو PDF -->
+                    <div class="mb-3">
+                        <label for="documentFile" class="form-label fw-bold">اختر ملف المستند (DOCX أو PDF):</label>
+                        <input class="form-control form-control-lg" type="file" id="documentFile" accept=".docx, .pdf">
+                    </div>
+
+                    <!-- إدخال النص مباشرة -->
+                    <div class="mb-4">
+                        <label for="rawText" class="form-label fw-bold">أو قم بلصق نص العريضة مباشرة هنا:</label>
+                        <textarea class="form-control" id="rawText" rows="6" placeholder="انسخ نص العريضة والصقه هنا في حال عدم اختيار ملف..."></textarea>
+                    </div>
+
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-ui-checks-grid me-2"></i>اختر نوع الخدمة القضائية لبدء الفحص والمطابقة:</h6>
+                    
+                    <!-- الأزرار الأربعة لكل نوع خدمة قضائية -->
+                    <div class="row g-2">
+                        <div class="col-md-3 col-6">
+                            <button onclick="startAnalysis('NewLawsuit')" class="btn btn-primary btn-action w-100">
+                                <i class="bi bi-file-earmark-plus d-block fs-3 mb-1"></i>دعوى جديدة
+                            </button>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <button onclick="startAnalysis('AppealPetition')" class="btn btn-warning text-dark btn-action w-100">
+                                <i class="bi bi-journal-text d-block fs-3 mb-1"></i>عريضة طعن
+                            </button>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <button onclick="startAnalysis('PetitionOrder')" class="btn btn-info text-white btn-action w-100">
+                                <i class="bi bi-file-earmark-word d-block fs-3 mb-1"></i>أمر على عريضة
+                            </button>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <button onclick="startAnalysis('PerformanceOrder')" class="btn btn-success btn-action w-100">
+                                <i class="bi bi-cash-stack d-block fs-3 mb-1"></i>أمر أداء
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- لوحة النتائج الإشعارات -->
+                <div id="resultsDashboard" class="d-none">
+                    <h4 class="fw-bold mb-3"><i class="bi bi-card-checklist me-2"></i>نتائج تقرير التدقيق</h4>
+
+                    <div id="statusAlert" class="alert mb-4"></div>
+
+                    <div class="row">
+                        <!-- الحقول والمرفقات الناقصة -->
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-warning h-100 shadow-sm">
+                                <div class="card-header bg-warning text-dark fw-bold py-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>الحقول الإلزامية والمرفقات الناقصة</div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush" id="missingFieldsList"></ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- أخطاء القيود للشروط والتعارضات -->
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-danger h-100 shadow-sm">
+                                <div class="card-header bg-danger text-white fw-bold py-3"><i class="bi bi-x-circle-fill me-2"></i>أخطاء الضوابط القياسية</div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush" id="validationErrorsList"></ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Block -->
+    <script>
+        async function startAnalysis(actionType) {
+            const fileInput = document.getElementById('documentFile');
+            const rawText = document.getElementById('rawText').value;
+
+            if (!fileInput.files[0] && !rawText.trim()) {
+                alert('يرجى إرفاق ملف (Word أو PDF) أو كتابة نص العريضة في الخانة المخصصة أولاً.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('actionType', actionType);
+            if (fileInput.files[0]) {
+                formData.append('documentFile', fileInput.files[0]);
+            }
+            if (rawText.trim()) {
+                formData.append('rawText', rawText);
+            }
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('resultsDashboard').classList.add('d-none');
+
+            try {
+                const response = await fetch('https://legal-checker-backend.onrender.com/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data) {
+                    throw new Error(data.message || 'حدث خطأ غير متوقع أثناء الفحص.');
+                }
+
+                renderDashboard(data);
+
+            } catch (err) {
+                alert('خطأ: ' + err.message);
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        function renderDashboard(data) {
+            document.getElementById('resultsDashboard').classList.remove('d-none');
+
+            // 1. إشعار حالة المستند
+            const statusAlert = document.getElementById('statusAlert');
+            if (data.isReadyForSubmission) {
+                statusAlert.className = 'alert alert-success fw-bold p-3 fs-5';
+                statusAlert.innerHTML = '<i class="bi bi-patch-check-fill me-2"></i>المستند متوافق ومكتمل، ومستوفٍ لكافة البيانات والمرفقات المطلوبة.';
+            } else {
+                statusAlert.className = 'alert alert-danger fw-bold p-3 fs-5';
+                statusAlert.innerHTML = '<i class="bi bi-exclamation-octagon-fill me-2"></i>المستند غير مكتمل؛ يتضمن حقولاً ناقصة أو أخطاء في ضوابط الإدخال.';
+            }
+
+            // 2. عرض الحقول والمرفقات الناقصة
+            const missingList = document.getElementById('missingFieldsList');
+            missingList.innerHTML = '';
+            if (!data.missingFields || data.missingFields.length === 0) {
+                missingList.innerHTML = '<li class="list-group-item text-success fw-bold py-3"><i class="bi bi-check-circle-fill me-2"></i>جميع الحقول والمرفقات الإلزامية متوفرة بالكامل!</li>';
+            } else {
+                data.missingFields.forEach(field => {
+                    missingList.innerHTML += `<li class="list-group-item text-danger fw-bold py-2"><i class="bi bi-dash-circle me-2"></i>${field}</li>`;
+                });
+            }
+
+            // 3. عرض أخطاء التعارضات وضوابط الحقول
+            const errorsList = document.getElementById('validationErrorsList');
+            errorsList.innerHTML = '';
+            if (!data.validationErrors || data.validationErrors.length === 0) {
+                errorsList.innerHTML = '<li class="list-group-item text-success fw-bold py-3"><i class="bi bi-shield-check me-2"></i>لا توجد أي أخطاء أو مخالفات لضوابط الحقول الإلزامية.</li>';
+            } else {
+                data.validationErrors.forEach(err => {
+                    errorsList.innerHTML += `<li class="list-group-item py-2"><strong>${err.fieldName}:</strong> <span class="text-danger fs-6 d-block mt-1">${err.issueDescription}</span></li>`;
+                });
+            }
+
+            document.getElementById('resultsDashboard').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
